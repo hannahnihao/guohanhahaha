@@ -1,0 +1,242 @@
+import re             #正则化包
+import requests       #网页转化的包
+import pandas as pd   #数据框相关的包
+import numpy as np    #矩阵相关的包
+import json           #json转化包
+import time           #时间相关包
+import random         #随机数包
+import calendar       #日期包
+
+
+"""
+创建一个类用于收集特定博主博文下的评论
+"""
+
+class return_blog_comment():
+    def __init__(self,blog_url,headers):
+        self.blog_url=blog_url              #博文正文的url
+        self.headers=headers                #页面的请求头
+    
+    #将url转化为json可以访问的类型,返回一个初始url和评论id
+    def transform_url(self):
+        blog_url_list=self.blog_url.split("/")
+        blog_id=blog_url_list[-1]
+        transformed_url="https://m.weibo.cn/comments/hotflow?id="+blog_id+"&mid="+blog_id+"&max_id_type=0"
+        
+        return transformed_url,blog_id
+
+    #开始爬取评论下面的数据（全部爬取）并写入excel表格中
+    def get_write_all_comment(self,xlsx_name):
+        
+        flag=1
+        initial_url,blog_id=self.transform_url()
+        screen_name_list=[]
+        id_list=[]
+        like_count_list=[]
+        created_at_list=[]
+        text_list=[]
+        
+        text="text"
+        while True:
+            if flag == 1:
+                url=initial_url
+            else:
+                url="https://m.weibo.cn/comments/hotflow?id="+blog_id+"&mid="+blog_id+"&max_id={}&max_id_type={}".format(max_id,max_id_type)
+                print(url)
+            html=requests.get(url=url,headers=self.headers)
+            json_html=json.loads(html.text)
+            if "data" not in json_html.keys():
+                break
+            data=json_html["data"]         
+            max_id=data["max_id"]
+            if max_id == 0:
+                break
+                
+            max_id_type=data["max_id_type"]
+            
+            for i in data["data"]:
+                screen_name=i["user"]["screen_name"]     #用户名
+                i_d=i["user"]["id"]                      #用户id
+                like_count=i["like_count"]               #点赞数
+                
+                
+                #将时间转化为标准形式 yyyy-m-dd h:f:s
+                created_at=i["created_at"]               #评论时间
+                time_list=created_at.split(" ")
+                year=time_list[-1]
+                month_e=time_list[1]
+                month_n=str(list(calendar.month_abbr).index(month_e))
+                day=time_list[2]
+                second=time_list[3]
+                time_1="-".join([year,month_n,day])
+                created_at_time=" ".join([time_1,second])
+                print(created_at_time)
+                text=re.sub(r"<[^>]*>","",i["text"])     #评论
+                print(text)
+                
+                screen_name_list.append(screen_name)
+                id_list.append(i_d)
+                like_count_list.append(like_count)
+                created_at_list.append(created_at_time)
+                text_list.append(text)
+            
+            
+            time.sleep(random.uniform(2,7))
+            flag+=1
+        
+        screen_name_array=np.array(screen_name_list).reshape(-1,1)
+        id_array=np.array(id_list).reshape(-1,1)
+        like_count_array=np.array(like_count_list).reshape(-1,1)
+        created_at_array=np.array(created_at_list).reshape(-1,1)
+        text_array=np.array(text_list).reshape(-1,1)
+        info_list=[screen_name_array,id_array,like_count_array,created_at_array,text_array]
+        info_array=np.concatenate(tuple(info_list),axis=1)
+        info_df=pd.DataFrame(info_array,columns=["用户名","用户id","点赞人数","创建时间","评论"])
+        info_df.to_excel("comment_scrapy/"+xlsx_name+".xlsx")      #修改指定路径
+        
+        
+    #开始爬取评论下面的数据（爬取部分评论，指定最大评论数）并写入excel表格中
+    def get_write_specific_comment(self,xlsx_name,comment_max_length):  
+        
+        flag=1
+        initial_url,blog_id=self.transform_url()
+        screen_name_list=[]
+        id_list=[]
+        like_count_list=[]
+        created_at_list=[]
+        text_list=[]
+        
+        text="text"
+        while True:
+            if flag == 1:
+                url=initial_url
+            else:
+                url="https://m.weibo.cn/comments/hotflow?id="+blog_id+"&mid="+blog_id+"&max_id={}&max_id_type={}".format(max_id,max_id_type)
+                print(url)
+            html=requests.get(url=url,headers=self.headers)
+            json_html=json.loads(html.text)
+            if "data" not in json_html.keys():
+                break
+            data=json_html["data"]         
+            max_id=data["max_id"]
+            if max_id == 0:
+                break
+            max_id_type=data["max_id_type"]
+            
+            for i in data["data"]:
+                screen_name=i["user"]["screen_name"]     #用户名
+                i_d=i["user"]["id"]                      #用户id
+                like_count=i["like_count"]               #点赞数
+                
+                
+                #将时间转化为标准形式 yyyy-m-dd h:f:s
+                created_at=i["created_at"]               #评论时间
+                time_list=created_at.split(" ")
+                year=time_list[-1]
+                month_e=time_list[1]
+                month_n=str(list(calendar.month_abbr).index(month_e))
+                day=time_list[2]
+                second=time_list[3]
+                time_1="-".join([year,month_n,day])
+                created_at_time=" ".join([time_1,second])
+                print(created_at_time)
+                text=re.sub(r"<[^>]*>","",i["text"])     #评论
+                print(text)
+                
+                screen_name_list.append(screen_name)
+                id_list.append(i_d)
+                like_count_list.append(like_count)
+                created_at_list.append(created_at_time)
+                text_list.append(text)
+            
+            if len(id_list) > comment_max_length:        #评论采集条数超过指定数目，停止采集
+                break
+            
+            time.sleep(7)
+            flag+=1
+        
+        screen_name_array=np.array(screen_name_list).reshape(-1,1)
+        id_array=np.array(id_list).reshape(-1,1)
+        like_count_array=np.array(like_count_list).reshape(-1,1)
+        created_at_array=np.array(created_at_list).reshape(-1,1)
+        text_array=np.array(text_list).reshape(-1,1)
+        info_list=[screen_name_array,id_array,like_count_array,created_at_array,text_array]
+        info_array=np.concatenate(tuple(info_list),axis=1)
+        info_df=pd.DataFrame(info_array,columns=["用户名","用户id","点赞人数","创建时间","评论"])
+        info_df.to_excel("comment_scrapy/"+xlsx_name+".xlsx")             #这里可以修改文件保存路径 
+
+
+
+
+                       
+################################################ run ##############################################                
+
+"""
+#每次抓取时注意重新更换cookie , 避免被反爬机制侦测到, 或者写一个可以更换cookie的代码
+headers={
+        "user-agent":"xxxxxxxxxxxxx",       #这里输入个人的user-agent  
+        "cookie":"xxxxxxxxxxxxxxxxx"        #这里输入个人的cookie
+        }
+#注意：
+#我们爬取的都是手机版的微博： https://m.weibo.cn/
+#然后我们需要将需要爬取的博文路径复制出来
+if __name__=="__main__":
+    comment_url="xxx"                                      #xxx表示需要填入网址url
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("xxx")                   #xxx表示xlsx文件的命名
+"""
+
+
+################################################ test ##############################################
+
+
+
+headers={
+        "user-agent":"xxxx",       #这里输入个人的user-agent  
+        "cookie":"xxxxx"        #这里输入个人的cookie
+        }
+
+if __name__=="__main__":
+
+
+    comment_url="https://m.weibo.cn/1699432410/4642930452598659"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("新华社首发三孩政策出台")                                             #这里输入保存的名字（保存文件格式为xlsx）
+    
+    comment_url="https://m.weibo.cn/2803301701/4642932752127273"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("人民日报最新三孩政策")       
+
+
+
+    comment_url="https://m.weibo.cn/2803301701/4661133254069552"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("9图速览三孩配套支持要点")                                             #这里输入保存的名字（保存文件格式为xlsx）
+    
+    comment_url="https://m.weibo.cn/2803301701/4661110375193600"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("积极应对人口老龄化")
+
+    comment_url="https://m.weibo.cn/5044281310/4663955639767144"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("四川攀枝花出台新政")                                             #这里输入保存的名字（保存文件格式为xlsx）
+   
+
+
+    comment_url="https://m.weibo.cn/5044281310/4675297472939569"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("独生子女父母光荣证")       
+
+
+
+    comment_url="https://m.weibo.cn/5044281310/4672904396541601"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("上海修订计生条例")                                             #这里输入保存的名字（保存文件格式为xlsx）
+    
+    comment_url="https://m.weibo.cn/1191965271/4707412290309189"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("2145份问卷里的职业女性生育难题")
+
+    comment_url="https://m.weibo.cn/1191965271/4708085014725402"                                   #这里输入博文路径（微博手机版）
+    comment=return_blog_comment(comment_url,headers)          
+    comment.get_write_all_comment("怎样才是一位合格的父亲")
